@@ -37,18 +37,15 @@ Extension data is raw `(type, bytes)`, including timestamp type `-1`. Nesting is
 | Path | Role |
 |------|------|
 | `src/msgpack.hy` | `Msgpack`, `MsgpackValue`, `MsgpackError`, parser/encoder |
-| `coil.toml` | `[package] name = "msgpack"` so `use msgpack::{…}` resolves |
+| `coil.toml` | spool manifest (`[package] name = "msgpack"`); coil does not read it |
 
 ## Consume
 
-Sibling checkout, or a git dep plus `coil.lock` pin. Call `Msgpack::standard()` from [docs/consume.md](docs/consume.md).
-
-```toml
-[dependencies]
-msgpack = { git = "https://github.com/ardax-corp/coil-msgpack.git" }
+```bash
+spool add msgpack --git https://github.com/ardax-corp/coil-msgpack.git --rev <commit SHA>
 ```
 
-`{ git }` is the parseable form. `version` is optional schema, not a tag. The pin is `coil.lock` `rev` + `content_hash`. coil-stdlib is a sibling `[module] roots` entry, not a spool dependency of this package.
+No tags yet, so pin a commit. Without spool, pass `--root ../coil-msgpack/src` to `coil`. See [docs/consume.md](docs/consume.md).
 
 ## Test
 

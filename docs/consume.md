@@ -2,41 +2,21 @@
 
 This package is `msgpack`. `use msgpack::{Msgpack, MsgpackValue, MsgpackError}` resolves from `src/msgpack.hy`. One-shot encode/decode ships here. Do not add a native/FFI dep.
 
-Coil-to-Coil deps will be spool-owned once a public `spool` CLI exists. Until then `{ git }` parses and the pin is `coil.lock` `rev` + `content_hash`.
+## Depend on it
 
-## Sibling checkout
+With [spool](https://github.com/ardax-corp/spool):
 
-Clone this repo next to your project. In the consumer `coil.toml`:
-
-```toml
-[module]
-roots = ["./src", "../coil-msgpack/src"]
+```bash
+spool add msgpack --git https://github.com/ardax-corp/coil-msgpack.git --rev <commit SHA>
 ```
 
-`roots` is what loads `src/msgpack.hy`. The compiler does not follow path deps for discovery.
+This repo has no tags, so pin a commit with `--rev`. spool records the dep in `coil.toml`, writes `coil.lock` (`rev` + `content_hash`), links `.spool/deps/msgpack`, and passes `--root` for it and coil-stdlib to `coil` on `spool build` / `run` / `test`.
 
-## Git dep and coil.lock
+Without spool, clone this repo next to your project and pass the roots yourself. coil reads no `coil.toml` and no `coil.lock`.
 
-```toml
-[dependencies]
-msgpack = { git = "https://github.com/ardax-corp/coil-msgpack.git" }
-
-[module]
-roots = ["./src", "./.spool/deps/msgpack/src"]
+```bash
+coil --root ../coil-msgpack/src main.hy
 ```
-
-This repo has no tags. The pin is `coil.lock` `rev` + `content_hash`. Omit `tag`. Use sibling checkout until spool materializes `.spool/deps`. The compiler does not read `coil.lock` and does not inject roots.
-
-```
-# spool lockfile v1
-[[package]]
-name = 'msgpack'
-git = 'https://github.com/ardax-corp/coil-msgpack.git'
-rev = '<commit SHA>'
-content_hash = '<tree SHA>'
-```
-
-`rev` is the commit. `content_hash` is that commit's git tree (`git rev-parse 'HEAD^{tree}'`). Replace both when you move the pin.
 
 ## Call Msgpack::standard()
 
