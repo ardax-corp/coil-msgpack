@@ -24,7 +24,10 @@ jobs:
       # coil comes from the coil-lang `edge` release (a snapshot of its main,
       # rebuilt after every green coil-lang CI run) instead of a source build.
       - name: Install coil (edge)
+        id: coil
         uses: ardax-corp/coil-lang/.github/actions/setup-coil@main
+        with:
+          stdlib: true
 
       - name: Language harness (`coil test`)
-        run: coil test
+        run: coil test --root "${{ steps.coil.outputs.stdlib }}"
