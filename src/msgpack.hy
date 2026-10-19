@@ -66,9 +66,9 @@ impl Store {
     }
 
     pub static fn copy_bytes(Vec<byte> src) -> Vec<byte> {
-        let out: Vec<byte> = Vec::with_capacity(len(src));
+        let out: Vec<byte> = Vec::with_capacity(src.len());
         let i = 0;
-        while i < len(src) {
+        while i < src.len() {
             out.push(src[i]);
             i = i + 1;
         }
@@ -94,7 +94,7 @@ impl Store {
     }
 
     pub fn add(int tag, bool flag, int n, float x, string s, string key, Vec<byte> bin) -> int {
-        let idx = len(self.tags);
+        let idx = self.tags.len();
         self.tags.push(tag);
         self.flags.push(flag);
         self.ints.push(n);
@@ -265,7 +265,7 @@ impl MsgpackValue {
 
     pub static fn from_bin(Vec<byte> data) -> MsgpackValue {
         let st = Store::new();
-        let idx = st.add(TAG_BIN, false, len(data), 0.0, "", "", data);
+        let idx = st.add(TAG_BIN, false, data.len(), 0.0, "", "", data);
         return MsgpackValue::wrap(st, idx);
     }
 
@@ -342,7 +342,7 @@ impl MsgpackValue {
         if self.tag != TAG_BIN && self.tag != TAG_EXT {
             return 0;
         }
-        return len(self.store.bins[self.idx]);
+        return self.store.bins[self.idx].len();
     }
 
     pub fn ext_type() -> int {
@@ -701,7 +701,7 @@ impl MsgpackValue {
 
     fn push_raw(Vec<byte> out, Vec<byte> raw) {
         let i = 0;
-        while i < len(raw) {
+        while i < raw.len() {
             out.push(raw[i]);
             i = i + 1;
         }
@@ -753,7 +753,7 @@ impl MsgpackValue {
         }
         if tag == TAG_STR {
             let raw = to_bytes(self.store.strs[idx]);
-            let n = len(raw);
+            let n = raw.len();
             if n <= 31 {
                 self.push_u8(out, 160 + n);
             } else {
@@ -764,13 +764,13 @@ impl MsgpackValue {
         }
         if tag == TAG_BIN {
             let raw = self.store.bins[idx];
-            self.write_counted(out, len(raw), 196, 197, 198)?;
+            self.write_counted(out, raw.len(), 196, 197, 198)?;
             self.push_raw(out, raw);
             return ();
         }
         if tag == TAG_EXT {
             let raw = self.store.bins[idx];
-            let n = len(raw);
+            let n = raw.len();
             let ty = self.store.ints[idx];
             if n == 1 {
                 self.push_u8(out, 212);
@@ -836,7 +836,7 @@ impl MsgpackValue {
     }
 
     pub fn encode_buf() -> Result<Vec<byte>, MsgpackError> {
-        let n = len(self.store.tags) * 8;
+        let n = self.store.tags.len() * 8;
         if n < 16 {
             n = 16;
         }
@@ -848,7 +848,7 @@ impl MsgpackValue {
 
 impl Parser {
     pub fn at_end() -> bool {
-        return self.i >= len(self.bytes);
+        return self.i >= self.bytes.len();
     }
 
     pub fn column() -> int {
@@ -874,7 +874,7 @@ impl Parser {
         if n < 0 {
             raise MsgpackError::Invalid { line: 1, column: self.pos(at) };
         }
-        let rest = len(self.bytes) - self.i;
+        let rest = self.bytes.len() - self.i;
         if n > rest {
             raise MsgpackError::Invalid { line: 1, column: self.pos(self.i) };
         }
@@ -1332,7 +1332,7 @@ impl Msgpack {
     }
 
     pub fn decode(Vec<byte> bytes) -> Result<MsgpackValue, MsgpackError> {
-        let guess = len(bytes) / 2;
+        let guess = bytes.len() / 2;
         if guess < 4 {
             guess = 4;
         }
