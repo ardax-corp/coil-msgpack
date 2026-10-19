@@ -30,7 +30,7 @@ fn from_hex(string s) -> Vec<byte> {
     let b = to_bytes(s);
     let out: Vec<byte> = Vec::new();
     let i = 0;
-    while i < len(b) {
+    while i < b.len() {
         let hi = hex_val(b[i]);
         let lo = hex_val(b[i + 1]);
         let v = hi * 16 + lo;
@@ -51,9 +51,9 @@ fn hex_digit(int n) -> byte {
 }
 
 fn to_hex(Vec<byte> buf) -> string {
-    let out: Vec<byte> = Vec::with_capacity(len(buf) * 2);
+    let out: Vec<byte> = Vec::with_capacity(buf.len() * 2);
     let i = 0;
-    while i < len(buf) {
+    while i < buf.len() {
         let v = buf[i] as int;
         out.push(hex_digit(v / 16));
         out.push(hex_digit(v % 16));
@@ -283,7 +283,7 @@ test("strings") {
     assert!(enc_hex(empty) == "a0");
     let e = must_decode_hex("a2c3a9");
     let raw = to_bytes(e.s);
-    assert!(len(raw) == 2 && (raw[0] as int) == 195 && (raw[1] as int) == 169, "utf8");
+    assert!(raw.len() == 2 && (raw[0] as int) == 195 && (raw[1] as int) == 169, "utf8");
 }
 
 test("binary and ext") {
