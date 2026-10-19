@@ -5,8 +5,11 @@ use msgpack::{Msgpack, MsgpackValue, MsgpackError};
 use string::{from_bytes, to_bytes};
 
 const TWO_31: int = 2147483648;
+
 const U32_MAX: int = 4294967295;
+
 const TWO_32: int = 4294967296;
+
 const I64_MAX: int = 9223372036854775807;
 
 fn codec() -> Msgpack {
@@ -30,7 +33,7 @@ fn from_hex(string s) -> Vec<byte> {
     let b = to_bytes(s);
     let out: Vec<byte> = Vec::new();
     let i = 0;
-    while i < len(b) {
+    while i < b.len() {
         let hi = hex_val(b[i]);
         let lo = hex_val(b[i + 1]);
         let v = hi * 16 + lo;
@@ -51,9 +54,9 @@ fn hex_digit(int n) -> byte {
 }
 
 fn to_hex(Vec<byte> buf) -> string {
-    let out: Vec<byte> = Vec::with_capacity(len(buf) * 2);
+    let out: Vec<byte> = Vec::with_capacity(buf.len() * 2);
     let i = 0;
-    while i < len(buf) {
+    while i < buf.len() {
         let v = buf[i] as int;
         out.push(hex_digit(v / 16));
         out.push(hex_digit(v % 16));
@@ -87,14 +90,14 @@ fn must_append(MsgpackValue arr, MsgpackValue child) {
     match arr.append(child) {
         Result::Ok(_) => (),
         Result::Err(_) => panic "append",
-    };
+    }
 }
 
 fn must_put(MsgpackValue map, MsgpackValue key, MsgpackValue val) {
     match map.put(key, val) {
         Result::Ok(_) => (),
         Result::Err(_) => panic "put",
-    };
+    }
 }
 
 fn is_invalid_at(Result<MsgpackValue, MsgpackError> r, int line, int column) -> bool {
@@ -283,7 +286,7 @@ test("strings") {
     assert!(enc_hex(empty) == "a0");
     let e = must_decode_hex("a2c3a9");
     let raw = to_bytes(e.s);
-    assert!(len(raw) == 2 && (raw[0] as int) == 195 && (raw[1] as int) == 169, "utf8");
+    assert!(raw.len() == 2 && (raw[0] as int) == 195 && (raw[1] as int) == 169, "utf8");
 }
 
 test("binary and ext") {
@@ -346,20 +349,26 @@ test("builder copies into the parent arena") {
 
 test("append and put reject the wrong container") {
     let n = MsgpackValue::nil();
-    assert!(match n.append(MsgpackValue::from_int(1)) {
-        Result::Ok(_) => false,
-        Result::Err(e) => match e {
-            MsgpackError::Invalid { line, column } => line == 1 && column == 1,
-            default => false,
+    assert!(
+        match n.append(MsgpackValue::from_int(1)) {
+            Result::Ok(_) => false,
+            Result::Err(e) => match e {
+                MsgpackError::Invalid { line, column } => line == 1 && column == 1,
+                default => false,
+            },
         },
-    }, "append nil");
-    assert!(match MsgpackValue::empty_array().put(MsgpackValue::from_string("a"), MsgpackValue::nil()) {
-        Result::Ok(_) => false,
-        Result::Err(e) => match e {
-            MsgpackError::Invalid { line, column } => line == 1 && column == 1,
-            default => false,
+        "append nil",
+    );
+    assert!(
+        match MsgpackValue::empty_array().put(MsgpackValue::from_string("a"), MsgpackValue::nil()) {
+            Result::Ok(_) => false,
+            Result::Err(e) => match e {
+                MsgpackError::Invalid { line, column } => line == 1 && column == 1,
+                default => false,
+            },
         },
-    }, "put array");
+        "put array",
+    );
 }
 
 test("missing key returns the map") {
