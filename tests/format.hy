@@ -5,8 +5,11 @@ use msgpack::{Msgpack, MsgpackValue, MsgpackError};
 use string::{from_bytes, to_bytes};
 
 const TWO_31: int = 2147483648;
+
 const U32_MAX: int = 4294967295;
+
 const TWO_32: int = 4294967296;
+
 const I64_MAX: int = 9223372036854775807;
 
 fn codec() -> Msgpack {
@@ -87,14 +90,14 @@ fn must_append(MsgpackValue arr, MsgpackValue child) {
     match arr.append(child) {
         Result::Ok(_) => (),
         Result::Err(_) => panic "append",
-    };
+    }
 }
 
 fn must_put(MsgpackValue map, MsgpackValue key, MsgpackValue val) {
     match map.put(key, val) {
         Result::Ok(_) => (),
         Result::Err(_) => panic "put",
-    };
+    }
 }
 
 fn is_invalid_at(Result<MsgpackValue, MsgpackError> r, int line, int column) -> bool {
@@ -346,20 +349,26 @@ test("builder copies into the parent arena") {
 
 test("append and put reject the wrong container") {
     let n = MsgpackValue::nil();
-    assert!(match n.append(MsgpackValue::from_int(1)) {
-        Result::Ok(_) => false,
-        Result::Err(e) => match e {
-            MsgpackError::Invalid { line, column } => line == 1 && column == 1,
-            default => false,
+    assert!(
+        match n.append(MsgpackValue::from_int(1)) {
+            Result::Ok(_) => false,
+            Result::Err(e) => match e {
+                MsgpackError::Invalid { line, column } => line == 1 && column == 1,
+                default => false,
+            },
         },
-    }, "append nil");
-    assert!(match MsgpackValue::empty_array().put(MsgpackValue::from_string("a"), MsgpackValue::nil()) {
-        Result::Ok(_) => false,
-        Result::Err(e) => match e {
-            MsgpackError::Invalid { line, column } => line == 1 && column == 1,
-            default => false,
+        "append nil",
+    );
+    assert!(
+        match MsgpackValue::empty_array().put(MsgpackValue::from_string("a"), MsgpackValue::nil()) {
+            Result::Ok(_) => false,
+            Result::Err(e) => match e {
+                MsgpackError::Invalid { line, column } => line == 1 && column == 1,
+                default => false,
+            },
         },
-    }, "put array");
+        "put array",
+    );
 }
 
 test("missing key returns the map") {

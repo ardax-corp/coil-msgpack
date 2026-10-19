@@ -6,27 +6,44 @@
 use string::{from_bytes, to_bytes};
 
 const TAG_NIL: int = 0;
+
 const TAG_BOOL: int = 1;
+
 const TAG_INT: int = 2;
+
 const TAG_FLOAT: int = 3;
+
 const TAG_STR: int = 4;
+
 const TAG_BIN: int = 5;
+
 const TAG_ARR: int = 6;
+
 const TAG_MAP: int = 7;
+
 const TAG_EXT: int = 8;
 
 const FLT_FINITE: int = 0;
+
 const FLT_INF: int = 1;
+
 const FLT_NAN: int = 2;
 
 const I64_MAX: int = 9223372036854775807;
+
 const I64_MIN: int = 0 - I64_MAX - 1;
+
 const U32_MAX: int = 4294967295;
+
 const U32: int = 4294967296;
+
 // 2^31. Function-body literals above i32 max are miscompiled; consts are fine.
 const TWO_31: int = 2147483648;
+
 const MANT_52: int = 4503599627370496;
+
 const NEG_INF_HI: int = 4293918720;
+
 const F64_MANT: float = 4503599627370496.0;
 
 class Store {
@@ -428,7 +445,7 @@ impl MsgpackValue {
         let copied = (new Copier(child.store, self.store)).copy(child.idx);
         self.store.attach(self.idx, copied);
         self.store.ints[self.idx] = self.store.ints[self.idx] + 1;
-        return ();
+        return;
     }
 
     /// Copy `key` and `val` onto the end of this map. Duplicate keys are kept.
@@ -441,7 +458,7 @@ impl MsgpackValue {
         self.store.attach(self.idx, k);
         self.store.attach(self.idx, v);
         self.store.ints[self.idx] = self.store.ints[self.idx] + 1;
-        return ();
+        return;
     }
 
     fn push_u8(Vec<byte> out, int n) {
@@ -542,23 +559,26 @@ impl MsgpackValue {
         self.push_i64(out, n);
     }
 
-    fn write_len_header(Vec<byte> out, int n, int fix_base, int fix_max, int op16, int op32) -> Result<(), MsgpackError> {
+    fn write_len_header(Vec<byte> out, int n, int fix_base, int fix_max, int op16, int op32) -> Result<
+        (),
+        MsgpackError,
+    > {
         if n < 0 {
             raise MsgpackError::Number { line: 1, column: 1 };
         }
         if n <= fix_max {
             self.push_u8(out, fix_base + n);
-            return ();
+            return;
         }
         if n <= 65535 {
             self.push_u8(out, op16);
             self.push_u16(out, n);
-            return ();
+            return;
         }
         if n <= U32_MAX {
             self.push_u8(out, op32);
             self.push_u32(out, n);
-            return ();
+            return;
         }
         raise MsgpackError::Number { line: 1, column: 1 };
     }
@@ -570,17 +590,17 @@ impl MsgpackValue {
         if n <= 255 {
             self.push_u8(out, op8);
             self.push_u8(out, n);
-            return ();
+            return;
         }
         if n <= 65535 {
             self.push_u8(out, op16);
             self.push_u16(out, n);
-            return ();
+            return;
         }
         if n <= U32_MAX {
             self.push_u8(out, op32);
             self.push_u32(out, n);
-            return ();
+            return;
         }
         raise MsgpackError::Number { line: 1, column: 1 };
     }
@@ -589,7 +609,7 @@ impl MsgpackValue {
         if mant_f <= 0.0 {
             return 0;
         }
-        let base = (floor(mant_f)) as int;
+        let base = floor(mant_f) as int;
         let frac = mant_f - (base as float);
         if frac >= 0.5 {
             base = base + 1;
@@ -619,7 +639,7 @@ impl MsgpackValue {
     fn write_f64(Vec<byte> out, float x, bool neg_zero) -> Result<(), MsgpackError> {
         if x != x {
             self.write_nan(out);
-            return ();
+            return;
         }
         let neg = false;
         if x < 0.0 {
@@ -641,7 +661,7 @@ impl MsgpackValue {
                 self.push_u32(out, 0);
             }
             self.push_u32(out, 0);
-            return ();
+            return;
         }
         let ax = x;
         if neg {
@@ -649,7 +669,7 @@ impl MsgpackValue {
         }
         if ax * 2.0 == ax {
             self.write_inf(out, neg);
-            return ();
+            return;
         }
         let exp = 0;
         let sig = ax;
@@ -682,7 +702,7 @@ impl MsgpackValue {
             }
             if exp > 1023 {
                 self.write_inf(out, neg);
-                return ();
+                return;
             }
             biased = exp + 1023;
         }
@@ -696,7 +716,7 @@ impl MsgpackValue {
         self.push_u8(out, 203);
         self.push_u32(out, hi);
         self.push_u32(out, mant_lo);
-        return ();
+        return;
     }
 
     fn push_raw(Vec<byte> out, Vec<byte> raw) {
@@ -716,7 +736,7 @@ impl MsgpackValue {
             b = b + 256;
         }
         self.push_u8(out, b);
-        return ();
+        return;
     }
 
     #[max_depth(256)]
@@ -724,7 +744,7 @@ impl MsgpackValue {
         let tag = self.store.tags[idx];
         if tag == TAG_NIL {
             self.push_u8(out, 192);
-            return ();
+            return;
         }
         if tag == TAG_BOOL {
             if self.store.flags[idx] {
@@ -732,24 +752,24 @@ impl MsgpackValue {
             } else {
                 self.push_u8(out, 194);
             }
-            return ();
+            return;
         }
         if tag == TAG_INT {
             self.write_int(out, self.store.ints[idx]);
-            return ();
+            return;
         }
         if tag == TAG_FLOAT {
             let kind = self.store.ints[idx];
             if kind == FLT_NAN {
                 self.write_nan(out);
-                return ();
+                return;
             }
             if kind == FLT_INF {
                 self.write_inf(out, self.store.flags[idx]);
-                return ();
+                return;
             }
             self.write_f64(out, self.store.floats[idx], self.store.flags[idx])?;
-            return ();
+            return;
         }
         if tag == TAG_STR {
             let raw = to_bytes(self.store.strs[idx]);
@@ -760,13 +780,13 @@ impl MsgpackValue {
                 self.write_counted(out, n, 217, 218, 219)?;
             }
             self.push_raw(out, raw);
-            return ();
+            return;
         }
         if tag == TAG_BIN {
             let raw = self.store.bins[idx];
             self.write_counted(out, raw.len(), 196, 197, 198)?;
             self.push_raw(out, raw);
-            return ();
+            return;
         }
         if tag == TAG_EXT {
             let raw = self.store.bins[idx];
@@ -800,7 +820,7 @@ impl MsgpackValue {
                 }
             }
             self.push_raw(out, raw);
-            return ();
+            return;
         }
         if tag == TAG_ARR {
             let n = self.store.ints[idx];
@@ -810,7 +830,7 @@ impl MsgpackValue {
                 self.emit_idx(out, c)?;
                 c = self.store.next[c];
             }
-            return ();
+            return;
         }
         if tag == TAG_MAP {
             let n = self.store.ints[idx];
@@ -830,7 +850,7 @@ impl MsgpackValue {
             if pairs != n {
                 raise MsgpackError::Invalid { line: 1, column: 1 };
             }
-            return ();
+            return;
         }
         raise MsgpackError::Invalid { line: 1, column: 1 };
     }
@@ -878,7 +898,7 @@ impl Parser {
         if n > rest {
             raise MsgpackError::Invalid { line: 1, column: self.pos(self.i) };
         }
-        return ();
+        return;
     }
 
     fn read_u8(int at) -> Result<int, MsgpackError> {
@@ -922,10 +942,22 @@ impl Parser {
 
     fn rethrow(MsgpackError err) -> Result<MsgpackValue, MsgpackError> {
         return match err {
-            MsgpackError::Invalid { line, column } => raise MsgpackError::Invalid { line: line, column: column },
-            MsgpackError::Io { line, column } => raise MsgpackError::Io { line: line, column: column },
-            MsgpackError::Utf8 { line, column } => raise MsgpackError::Utf8 { line: line, column: column },
-            MsgpackError::Number { line, column } => raise MsgpackError::Number { line: line, column: column },
+            MsgpackError::Invalid { line, column } => raise MsgpackError::Invalid {
+                line: line,
+                column: column,
+            },
+            MsgpackError::Io { line, column } => raise MsgpackError::Io {
+                line: line,
+                column: column,
+            },
+            MsgpackError::Utf8 { line, column } => raise MsgpackError::Utf8 {
+                line: line,
+                column: column,
+            },
+            MsgpackError::Number { line, column } => raise MsgpackError::Number {
+                line: line,
+                column: column,
+            },
         };
     }
 
@@ -941,7 +973,7 @@ impl Parser {
             Result::Err(err) => {
                 return self.rethrow(err)?;
             },
-        };
+        }
     }
 
     fn read_u64_fit(int at) -> Result<int, MsgpackError> {
