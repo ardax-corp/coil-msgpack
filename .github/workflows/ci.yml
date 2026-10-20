@@ -1,10 +1,11 @@
 name: CI
 
-# Every pull request, and every push to master (including merges).
+# Every pull request into master, and every push to master (including merges).
 on:
   push:
     branches: [master]
   pull_request:
+    branches: [master]
 
 permissions:
   contents: read
