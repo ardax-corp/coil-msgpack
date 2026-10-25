@@ -100,11 +100,11 @@ fn must_put(MsgpackValue map, MsgpackValue key, MsgpackValue val) {
     }
 }
 
-fn is_invalid_at(Result<MsgpackValue, MsgpackError> r, int line, int column) -> bool {
+fn is_invalid_at(Result<MsgpackValue, MsgpackError> r, int offset) -> bool {
     return match r {
         Result::Ok(_) => false,
         Result::Err(e) => match e {
-            MsgpackError::Invalid { line: ln, column: col } => ln == line && col == column,
+            MsgpackError::Invalid { offset: at } => at == offset,
             default => false,
         },
     };
@@ -114,7 +114,7 @@ fn is_number(Result<MsgpackValue, MsgpackError> r) -> bool {
     return match r {
         Result::Ok(_) => false,
         Result::Err(e) => match e {
-            MsgpackError::Number { line, column } => line >= 1 && column >= 1,
+            MsgpackError::Number { offset } => offset >= 0,
             default => false,
         },
     };
@@ -124,7 +124,7 @@ fn is_utf8(Result<MsgpackValue, MsgpackError> r) -> bool {
     return match r {
         Result::Ok(_) => false,
         Result::Err(e) => match e {
-            MsgpackError::Utf8 { line, column } => line >= 1 && column >= 1,
+            MsgpackError::Utf8 { offset } => offset >= 0,
             default => false,
         },
     };
@@ -134,7 +134,7 @@ fn encode_is_utf8(Result<string, MsgpackError> r) -> bool {
     return match r {
         Result::Ok(_) => false,
         Result::Err(e) => match e {
-            MsgpackError::Utf8 { line, column } => line >= 1 && column >= 1,
+            MsgpackError::Utf8 { offset } => offset >= 0,
             default => false,
         },
     };
@@ -144,7 +144,7 @@ fn encode_is_number(Result<Vec<byte>, MsgpackError> r) -> bool {
     return match r {
         Result::Ok(_) => false,
         Result::Err(e) => match e {
-            MsgpackError::Number { line, column } => line >= 1 && column >= 1,
+            MsgpackError::Number { offset } => offset >= 0,
             default => false,
         },
     };
@@ -353,7 +353,7 @@ test("append and put reject the wrong container") {
         match n.append(MsgpackValue::from_int(1)) {
             Result::Ok(_) => false,
             Result::Err(e) => match e {
-                MsgpackError::Invalid { line, column } => line == 1 && column == 1,
+                MsgpackError::Invalid { offset } => offset == 0,
                 default => false,
             },
         },
@@ -363,7 +363,7 @@ test("append and put reject the wrong container") {
         match MsgpackValue::empty_array().put(MsgpackValue::from_string("a"), MsgpackValue::nil()) {
             Result::Ok(_) => false,
             Result::Err(e) => match e {
-                MsgpackError::Invalid { line, column } => line == 1 && column == 1,
+                MsgpackError::Invalid { offset } => offset == 0,
                 default => false,
             },
         },
@@ -378,11 +378,11 @@ test("missing key returns the map") {
 }
 
 test("truncated and reserved") {
-    assert!(is_invalid_at(codec().decode(from_hex("")), 1, 1), "empty");
-    assert!(is_invalid_at(codec().decode(from_hex("c1")), 1, 1), "reserved");
-    assert!(is_invalid_at(codec().decode(from_hex("cc")), 1, 2), "uint8 short");
-    assert!(is_invalid_at(codec().decode(from_hex("81")), 1, 2), "map short");
-    assert!(is_invalid_at(codec().decode(from_hex("c0c0")), 1, 2), "trailing");
+    assert!(is_invalid_at(codec().decode(from_hex("")), 0), "empty");
+    assert!(is_invalid_at(codec().decode(from_hex("c1")), 0), "reserved");
+    assert!(is_invalid_at(codec().decode(from_hex("cc")), 1), "uint8 short");
+    assert!(is_invalid_at(codec().decode(from_hex("81")), 1), "map short");
+    assert!(is_invalid_at(codec().decode(from_hex("c0c0")), 1), "trailing");
     assert!(is_utf8(codec().decode(from_hex("a1ff"))), "bad str");
 }
 
