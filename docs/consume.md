@@ -72,20 +72,19 @@ An integer that fits in i64 stays an int. uint64 values above i64 max are `Msgpa
 
 ```coil
 enum MsgpackError {
-    Invalid { line: int, column: int },
-    Io { line: int, column: int },
-    Utf8 { line: int, column: int },
-    Number { line: int, column: int },
+    Invalid { offset: int },
+    Utf8 { offset: int },
+    Number { offset: int },
 }
 ```
 
-`line` is 1. `column` is the 1-based byte offset. Malformed input returns `MsgpackError::Invalid` with position, not a panic. A string payload that is not UTF-8 is `MsgpackError::Utf8`.
+`offset` is the 0-based byte offset of the failure in the input (0 for an encode failure). Malformed input returns `MsgpackError::Invalid` with position, not a panic. A string payload that is not UTF-8 is `MsgpackError::Utf8`.
 
 ```coil
 match m.decode(bytes) {
     Result::Ok(_) => false,
     Result::Err(e) => match e {
-        MsgpackError::Invalid { line, column } => line >= 1 && column >= 1,
+        MsgpackError::Invalid { offset } => offset >= 0,
         default => false,
     },
 }
