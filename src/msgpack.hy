@@ -178,12 +178,12 @@ impl Copier {
     }
 }
 
-/// Decode/encode failure. `line` is 1. `column` is the 1-based byte offset.
+/// Decode/encode failure. `offset` is the 0-based byte offset in the input
+/// (0 for an encode failure or an empty input).
 enum MsgpackError {
-    Invalid { line: int, column: int },
-    Io { line: int, column: int },
-    Utf8 { line: int, column: int },
-    Number { line: int, column: int },
+    Invalid { offset: int },
+    Utf8 { offset: int },
+    Number { offset: int },
 }
 
 /// MessagePack value. Maps are ordered key/value children. Duplicates are kept.
@@ -440,7 +440,7 @@ impl MsgpackValue {
     /// Copy `child` onto the end of this array.
     pub fn append(MsgpackValue child) -> Result<(), MsgpackError> {
         if self.tag != TAG_ARR {
-            raise MsgpackError::Invalid { line: 1, column: 1 };
+            raise MsgpackError::Invalid { offset: 0 };
         }
         let copied = (new Copier(child.store, self.store)).copy(child.idx);
         self.store.attach(self.idx, copied);
@@ -451,7 +451,7 @@ impl MsgpackValue {
     /// Copy `key` and `val` onto the end of this map. Duplicate keys are kept.
     pub fn put(MsgpackValue key, MsgpackValue val) -> Result<(), MsgpackError> {
         if self.tag != TAG_MAP {
-            raise MsgpackError::Invalid { line: 1, column: 1 };
+            raise MsgpackError::Invalid { offset: 0 };
         }
         let k = (new Copier(key.store, self.store)).copy(key.idx);
         let v = (new Copier(val.store, self.store)).copy(val.idx);
@@ -564,7 +564,7 @@ impl MsgpackValue {
         MsgpackError,
     > {
         if n < 0 {
-            raise MsgpackError::Number { line: 1, column: 1 };
+            raise MsgpackError::Number { offset: 0 };
         }
         if n <= fix_max {
             self.push_u8(out, fix_base + n);
@@ -580,12 +580,12 @@ impl MsgpackValue {
             self.push_u32(out, n);
             return;
         }
-        raise MsgpackError::Number { line: 1, column: 1 };
+        raise MsgpackError::Number { offset: 0 };
     }
 
     fn write_counted(Vec<byte> out, int n, int op8, int op16, int op32) -> Result<(), MsgpackError> {
         if n < 0 {
-            raise MsgpackError::Number { line: 1, column: 1 };
+            raise MsgpackError::Number { offset: 0 };
         }
         if n <= 255 {
             self.push_u8(out, op8);
@@ -602,7 +602,7 @@ impl MsgpackValue {
             self.push_u32(out, n);
             return;
         }
-        raise MsgpackError::Number { line: 1, column: 1 };
+        raise MsgpackError::Number { offset: 0 };
     }
 
     fn round_mant(float mant_f) -> int {
@@ -679,7 +679,7 @@ impl MsgpackValue {
             exp = exp + 1;
             steps = steps + 1;
             if steps > 2048 {
-                raise MsgpackError::Number { line: 1, column: 1 };
+                raise MsgpackError::Number { offset: 0 };
             }
         }
         while sig < 1.0 && exp > -1022 {
@@ -729,7 +729,7 @@ impl MsgpackValue {
 
     fn write_ext_type(Vec<byte> out, int ty) -> Result<(), MsgpackError> {
         if ty < -128 || ty > 127 {
-            raise MsgpackError::Number { line: 1, column: 1 };
+            raise MsgpackError::Number { offset: 0 };
         }
         let b = ty;
         if b < 0 {
@@ -841,18 +841,18 @@ impl MsgpackValue {
                 self.emit_idx(out, c)?;
                 c = self.store.next[c];
                 if c < 0 {
-                    raise MsgpackError::Invalid { line: 1, column: 1 };
+                    raise MsgpackError::Invalid { offset: 0 };
                 }
                 self.emit_idx(out, c)?;
                 c = self.store.next[c];
                 pairs = pairs + 1;
             }
             if pairs != n {
-                raise MsgpackError::Invalid { line: 1, column: 1 };
+                raise MsgpackError::Invalid { offset: 0 };
             }
             return;
         }
-        raise MsgpackError::Invalid { line: 1, column: 1 };
+        raise MsgpackError::Invalid { offset: 0 };
     }
 
     pub fn encode_buf() -> Result<Vec<byte>, MsgpackError> {
@@ -875,11 +875,11 @@ impl Parser {
         return self.i + 1;
     }
 
-    fn pos(int at) -> int {
+    fn offset_at(int at) -> int {
         if at < 0 {
-            return 1;
+            return 0;
         }
-        return at + 1;
+        return at;
     }
 
     fn byte_at(int at) -> int {
@@ -892,11 +892,11 @@ impl Parser {
 
     fn need(int n, int at) -> Result<(), MsgpackError> {
         if n < 0 {
-            raise MsgpackError::Invalid { line: 1, column: self.pos(at) };
+            raise MsgpackError::Invalid { offset: self.offset_at(at) };
         }
         let rest = self.bytes.len() - self.i;
         if n > rest {
-            raise MsgpackError::Invalid { line: 1, column: self.pos(self.i) };
+            raise MsgpackError::Invalid { offset: self.offset_at(self.i) };
         }
         return;
     }
@@ -936,29 +936,12 @@ impl Parser {
         let raw = self.read_bytes(n, at)?;
         return match from_bytes(raw) {
             Result::Ok(s) => s,
-            Result::Err(_) => raise MsgpackError::Utf8 { line: 1, column: self.pos(at) },
+            Result::Err(_) => raise MsgpackError::Utf8 { offset: self.offset_at(at) },
         };
     }
 
     fn rethrow(MsgpackError err) -> Result<MsgpackValue, MsgpackError> {
-        return match err {
-            MsgpackError::Invalid { line, column } => raise MsgpackError::Invalid {
-                line: line,
-                column: column,
-            },
-            MsgpackError::Io { line, column } => raise MsgpackError::Io {
-                line: line,
-                column: column,
-            },
-            MsgpackError::Utf8 { line, column } => raise MsgpackError::Utf8 {
-                line: line,
-                column: column,
-            },
-            MsgpackError::Number { line, column } => raise MsgpackError::Number {
-                line: line,
-                column: column,
-            },
-        };
+        return Result::Err(err);
     }
 
     /// `let root = parse_value()?` inside `Result<MsgpackValue, _>` dropped the error.
@@ -966,7 +949,7 @@ impl Parser {
         match self.parse_value() {
             Result::Ok(root) => {
                 if !self.at_end() {
-                    raise MsgpackError::Invalid { line: 1, column: self.column() };
+                    raise MsgpackError::Invalid { offset: self.i };
                 }
                 return MsgpackValue::wrap(self.store, root);
             },
@@ -980,7 +963,7 @@ impl Parser {
         let hi = self.read_be(4, at)?;
         let lo = self.read_be(4, at)?;
         if hi >= TWO_31 {
-            raise MsgpackError::Number { line: 1, column: self.pos(at) };
+            raise MsgpackError::Number { offset: self.offset_at(at) };
         }
         return hi * U32 + lo;
     }
@@ -1349,7 +1332,7 @@ impl Parser {
         if b == 223 {
             return self.parse_seq(true, 4, at)?;
         }
-        raise MsgpackError::Invalid { line: 1, column: self.pos(at) };
+        raise MsgpackError::Invalid { offset: self.offset_at(at) };
     }
 }
 
@@ -1376,7 +1359,7 @@ impl Msgpack {
         let bytes = self.encode(value)?;
         return match from_bytes(bytes) {
             Result::Ok(s) => s,
-            Result::Err(_) => raise MsgpackError::Utf8 { line: 1, column: 1 },
+            Result::Err(_) => raise MsgpackError::Utf8 { offset: 0 },
         };
     }
 
