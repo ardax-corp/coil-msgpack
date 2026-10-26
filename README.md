@@ -14,7 +14,7 @@ let v = m.decode(bytes)?;
 let out = m.encode(v)?;
 ```
 
-`Msgpack::standard()` is the MessagePack format. Invalid input returns `MsgpackError` with `line` and `column` (`Invalid`, `Io`, `Utf8`, `Number`), not panic. `line` is 1. `column` is the 1-based byte offset of the failure.
+`Msgpack::standard()` is the MessagePack format. Invalid input returns `MsgpackError` with the 0-based byte `offset` of the failure (`Invalid`, `Utf8`, `Number`), not a panic.
 
 | Method | Role |
 |--------|------|
