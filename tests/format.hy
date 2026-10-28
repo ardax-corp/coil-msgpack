@@ -405,7 +405,7 @@ test("non-finite constructors") {
     assert!(enc_hex(MsgpackValue::nan()) == "cb7ff8000000000000");
     assert!(enc_hex(MsgpackValue::inf(false)) == "cb7ff0000000000000");
     assert!(enc_hex(MsgpackValue::inf(true)) == "cbfff0000000000000");
-    let inf = exp(1000.0);
+    let inf = 1.0 / 0.0;
     assert!(enc_hex(MsgpackValue::from_float(inf)) == "cb7ff0000000000000");
     assert!(enc_hex(MsgpackValue::from_float(0.0 - inf)) == "cbfff0000000000000");
 }
