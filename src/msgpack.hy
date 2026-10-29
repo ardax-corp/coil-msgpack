@@ -611,7 +611,8 @@ impl MsgpackValue {
         if mant_f <= 0.0 {
             return 0;
         }
-        let base = floor(mant_f) as int;
+        // Positive, so truncation is the floor.
+        let base = mant_f as int;
         let frac = mant_f - (base as float);
         if frac >= 0.5 {
             base = base + 1;
