@@ -46,7 +46,9 @@ const NEG_INF_HI: int = 4293918720;
 
 const F64_MANT: float = 4503599627370496.0;
 
-class Store {
+// Shared: every value of a tree is an index into one arena, and builders
+// write into it through any of them.
+shared class Store {
     pub tags: Vec<int>,
     pub flags: Vec<bool>,
     pub ints: Vec<int>,
