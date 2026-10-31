@@ -51,7 +51,7 @@ const F64_MANT: float = 4503599627370496.0;
 
 // Shared: every value of a tree is an index into one arena, and builders
 // write into it through any of them.
-/// Internal arena storage behind `MsgpackValue`; not meant to be used directly.
+// Internal arena storage behind `MsgpackValue`; not meant to be used directly.
 shared class Store {
     pub tags: Vec<int>,
     pub flags: Vec<bool>,
@@ -305,7 +305,7 @@ class Parser {
 class Msgpack {}
 
 impl MsgpackValue {
-    /// Handle on node `idx` of `store`. Internal: used by the decoder.
+    // Internal: a handle on node `idx` of `store`, used by the decoder.
     pub static fn wrap(Store store, int idx) -> MsgpackValue {
         return new MsgpackValue(
             store,
