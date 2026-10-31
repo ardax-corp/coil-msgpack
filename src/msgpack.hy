@@ -1,4 +1,7 @@
-// Package root. Coil-side MessagePack encode/decode.
+// MessagePack encode and decode in pure Coil.
+//
+// `Msgpack` is the codec, `MsgpackValue` a handle on a decoded or built value,
+// and `MsgpackError` the failure with a byte offset.
 // Named-module recursive `Vec<MsgpackValue>` does not unify (`MsgpackValue` vs `msgpack::MsgpackValue`).
 // The tree is an arena of primitive vecs; MsgpackValue is a (store, idx) handle.
 // Integers are i64. A uint64 above i64 max is MsgpackError::Number.
@@ -48,6 +51,7 @@ const F64_MANT: float = 4503599627370496.0;
 
 // Shared: every value of a tree is an index into one arena, and builders
 // write into it through any of them.
+/// Internal arena storage behind `MsgpackValue`; not meant to be used directly.
 shared class Store {
     pub tags: Vec<int>,
     pub flags: Vec<bool>,
@@ -151,8 +155,8 @@ impl Store {
     }
 }
 
-/// Holds both arenas so the recursive copy takes only an index.
-/// A `Store` parameter on a recursive method does not unify (`Store` vs `msgpack::Store`).
+// Holds both arenas so the recursive copy takes only an index.
+// A `Store` parameter on a recursive method does not unify (`Store` vs `msgpack::Store`).
 class Copier {
     src: Store,
     dst: Store,
@@ -180,35 +184,128 @@ impl Copier {
     }
 }
 
-/// Decode/encode failure. `offset` is the 0-based byte offset in the input
-/// (0 for an encode failure or an empty input).
+/// Why a decode, encode or build step failed.
+///
+/// `offset` is the 0-based byte offset in the input where reading failed.
+/// It is 0 for an encode failure,
+/// a failed `append` / `put`, or empty input. Malformed input is always
+/// reported as an error, never as a panic.
+///
+/// # Examples
+///
+/// ```
+/// use msgpack::{Msgpack, MsgpackError};
+/// # use tests::assert;
+/// // A fixarray of two elements that holds only one.
+/// let bytes: Vec<byte> = Vec::new();
+/// bytes.push(146 as byte);
+/// bytes.push(1 as byte);
+/// let off = match Msgpack::standard().decode(bytes) {
+///     Result::Ok(_) => -1,
+///     Result::Err(e) => match e {
+///         MsgpackError::Invalid { offset } => offset,
+///         default => -2,
+///     },
+/// };
+/// assert!(off == 2);
+/// ```
 enum MsgpackError {
+    /// The input is not MessagePack: a reserved or truncated value, trailing
+    /// bytes after the value, or empty input. Also `append` / `put` on a
+    /// value that is not an array / map.
     Invalid { offset: int },
+    /// A string payload is not valid UTF-8, or an encoded document could not
+    /// be read back as a `string` (`Msgpack::encode_str`).
     Utf8 { offset: int },
+    /// On decode, a uint64 above the largest `int` (i64). On encode, an
+    /// extension type code outside -128..=127 or a length too large for the
+    /// format.
     Number { offset: int },
 }
 
-/// MessagePack value. Maps are ordered key/value children. Duplicates are kept.
+/// A MessagePack value: nil, bool, int, float, string, binary, array, map or
+/// extension.
+///
+/// `MsgpackValue` is a handle on one node of a tree, not an enum. Ask its type
+/// with the `is_*` predicates, read scalars from the `flag`, `i`, `f` and `s`
+/// fields (`bytes()` for binary and extension data), and walk containers with
+/// `child`, `key_at`, `get` and `has`.
+///
+/// Build scalars with `nil` / `from_*`, and containers with `empty_array` /
+/// `empty_map` filled by `append` / `put`. Those copy their argument into the
+/// container, so a later change to the argument does not show in the
+/// container. Maps keep their entries in order, with any value as a key;
+/// duplicate keys are kept.
+///
+/// # Examples
+///
+/// ```
+/// use msgpack::{Msgpack, MsgpackValue};
+/// # use tests::assert;
+/// let tags = MsgpackValue::empty_array();
+/// let _ = tags.append(MsgpackValue::from_string("vm"));
+/// let doc = MsgpackValue::empty_map();
+/// let _ = doc.put(MsgpackValue::from_string("tags"), tags);
+/// let _ = doc.put(MsgpackValue::from_string("stars"), MsgpackValue::from_int(7));
+///
+/// let m = Msgpack::standard();
+/// let back = match m.encode(doc) {
+///     Result::Ok(bytes) => m.decode(bytes).unwrap_or(MsgpackValue::nil()),
+///     Result::Err(_) => MsgpackValue::nil(),
+/// };
+/// assert!(back.is_map() && back.map_len() == 2);
+/// assert!(back.key_at(0).s == "tags");
+/// assert!(back.get("tags").child(0).s == "vm");
+/// assert!(back.get("stars").i == 7);
+/// ```
 class MsgpackValue {
     store: Store,
     idx: int,
     tag: int,
+    /// The boolean payload when `is_bool()`. On a float that is infinite or
+    /// zero, `true` when it is negative.
     pub flag: bool,
+    /// The integer payload when `is_int()`. On a float, the kind: `0`
+    /// finite, `1` infinite, `2` NaN (check this rather than `f != f`). On an
+    /// extension, its type code (see `ext_type`).
     pub i: int,
+    /// The float payload when `is_float()`. A float32 is widened.
     pub f: float,
+    /// The string payload when `is_string()`.
     pub s: string,
 }
 
+/// Internal parser state used by `Msgpack::decode`; not meant to be used directly.
 class Parser {
     bytes: Vec<byte>,
     i: int,
     pub store: Store,
 }
 
-/// MessagePack codec. `Msgpack::standard()` is the one format.
+/// A MessagePack codec: one-shot decode of bytes to a `MsgpackValue`, and
+/// encode back.
+///
+/// Encode writes the smallest format family that holds each value (fixint,
+/// int8 ... int64, fixstr, str8 ..., and so on) and always writes floats as
+/// float64; NaN is written as the canonical quiet NaN. Decode accepts every
+/// format, including float32 and timestamps, which stay extension type `-1`.
+///
+/// # Examples
+///
+/// ```
+/// use msgpack::{Msgpack, MsgpackValue};
+/// # use tests::assert;
+/// let m = Msgpack::standard();
+/// let bytes = m.encode(MsgpackValue::from_int(300)).unwrap_or(Vec::new());
+/// // uint16: 0xcd, then 300 big-endian.
+/// assert!(bytes.len() == 3 && bytes[0] == (205 as byte));
+/// let v = m.decode(bytes).unwrap_or(MsgpackValue::nil());
+/// assert!(v.is_int() && v.i == 300);
+/// ```
 class Msgpack {}
 
 impl MsgpackValue {
+    /// Handle on node `idx` of `store`. Internal: used by the decoder.
     pub static fn wrap(Store store, int idx) -> MsgpackValue {
         return new MsgpackValue(
             store,
@@ -221,36 +318,53 @@ impl MsgpackValue {
         );
     }
 
+    /// The MessagePack `nil` value.
     pub static fn nil() -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_NIL, false, 0, 0.0, "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// A MessagePack boolean.
     pub static fn from_bool(bool flag) -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_BOOL, flag, 0, 0.0, "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// A MessagePack integer. Encode picks the smallest int or uint format.
     pub static fn from_int(int n) -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_INT, false, n, 0.0, "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// A NaN float, with the NaN kind set in `i`. Use it rather than
+    /// `from_float(0.0 / 0.0)`, since a host float may not keep a NaN.
     pub static fn nan() -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_FLOAT, false, FLT_NAN, Store::nan_float(), "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// An infinite float: `-inf` when `neg`, otherwise `+inf`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use msgpack::{MsgpackValue};
+    /// # use tests::assert;
+    /// let v = MsgpackValue::inf(true);
+    /// assert!(v.is_float() && v.i == 1 && v.flag);
+    /// ```
     pub static fn inf(bool neg) -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_FLOAT, neg, FLT_INF, Store::inf_float(neg), "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// A MessagePack float. Infinities, NaN and the sign of zero are recorded
+    /// in `i` and `flag`, so they round-trip.
     pub static fn from_float(float x) -> MsgpackValue {
         let kind = FLT_FINITE;
         let neg = false;
@@ -276,73 +390,102 @@ impl MsgpackValue {
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// A MessagePack string (UTF-8).
     pub static fn from_string(string s) -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_STR, false, 0, 0.0, s, "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// A MessagePack binary value holding `data`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use msgpack::{MsgpackValue};
+    /// use string::{to_bytes};
+    /// # use tests::assert;
+    /// let v = MsgpackValue::from_bin(to_bytes("raw"));
+    /// assert!(v.is_bin() && v.bin_len() == 3);
+    /// assert!(v.bytes()[0] == "r");
+    /// ```
     pub static fn from_bin(Vec<byte> data) -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_BIN, false, data.len(), 0.0, "", "", data);
         return MsgpackValue::wrap(st, idx);
     }
 
-    /// `ty` is the extension type code (-128..=127). Out of range fails at encode.
+    /// A MessagePack extension of type `ty` holding `data`.
+    ///
+    /// `ty` is the extension type code, -128..=127; negative codes are
+    /// reserved by the spec (`-1` is a timestamp). A code out of range is
+    /// accepted here and fails at encode with `MsgpackError::Number`.
     pub static fn from_ext(int ty, Vec<byte> data) -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_EXT, false, ty, 0.0, "", "", data);
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// An empty array. Add elements with `append`.
     pub static fn empty_array() -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_ARR, false, 0, 0.0, "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// An empty map. Add entries with `put`.
     pub static fn empty_map() -> MsgpackValue {
         let st = Store::new();
         let idx = st.add(TAG_MAP, false, 0, 0.0, "", "", Vec::new());
         return MsgpackValue::wrap(st, idx);
     }
 
+    /// Returns `true` for `nil`.
     pub fn is_nil() -> bool {
         return self.tag == TAG_NIL;
     }
 
+    /// Returns `true` for a boolean.
     pub fn is_bool() -> bool {
         return self.tag == TAG_BOOL;
     }
 
+    /// Returns `true` for an integer.
     pub fn is_int() -> bool {
         return self.tag == TAG_INT;
     }
 
+    /// Returns `true` for a float (float32 or float64).
     pub fn is_float() -> bool {
         return self.tag == TAG_FLOAT;
     }
 
+    /// Returns `true` for a string.
     pub fn is_string() -> bool {
         return self.tag == TAG_STR;
     }
 
+    /// Returns `true` for a binary value.
     pub fn is_bin() -> bool {
         return self.tag == TAG_BIN;
     }
 
+    /// Returns `true` for an array.
     pub fn is_array() -> bool {
         return self.tag == TAG_ARR;
     }
 
+    /// Returns `true` for a map.
     pub fn is_map() -> bool {
         return self.tag == TAG_MAP;
     }
 
+    /// Returns `true` for an extension (including a timestamp).
     pub fn is_ext() -> bool {
         return self.tag == TAG_EXT;
     }
 
+    /// Number of elements of an array, or 0 when this is not an array.
     pub fn array_len() -> int {
         if self.tag != TAG_ARR {
             return 0;
@@ -350,6 +493,7 @@ impl MsgpackValue {
         return self.store.ints[self.idx];
     }
 
+    /// Number of entries of a map, or 0 when this is not a map.
     pub fn map_len() -> int {
         if self.tag != TAG_MAP {
             return 0;
@@ -357,6 +501,8 @@ impl MsgpackValue {
         return self.store.ints[self.idx];
     }
 
+    /// Length in bytes of a binary or extension payload, or 0 for any other
+    /// value.
     pub fn bin_len() -> int {
         if self.tag != TAG_BIN && self.tag != TAG_EXT {
             return 0;
@@ -364,6 +510,8 @@ impl MsgpackValue {
         return self.store.bins[self.idx].len();
     }
 
+    /// The type code of an extension (`-1` for a timestamp), or 0 when this
+    /// is not an extension.
     pub fn ext_type() -> int {
         if self.tag != TAG_EXT {
             return 0;
@@ -371,6 +519,8 @@ impl MsgpackValue {
         return self.i;
     }
 
+    /// A copy of the payload of a binary or extension value, or an empty
+    /// `Vec` for any other value.
     pub fn bytes() -> Vec<byte> {
         if self.tag != TAG_BIN && self.tag != TAG_EXT {
             return Vec::new();
@@ -378,7 +528,10 @@ impl MsgpackValue {
         return Store::copy_bytes(self.store.bins[self.idx]);
     }
 
-    /// Nth array element, or nth map value. Out of range returns `self`.
+    /// Element `n` (0-based) of an array, or the value of entry `n` of a map.
+    ///
+    /// When `n` is out of range, or this is neither, this returns the value
+    /// itself, so check `n` against `array_len` / `map_len` first.
     pub fn child(int n) -> MsgpackValue {
         let c = -1;
         if self.tag == TAG_ARR {
@@ -394,7 +547,11 @@ impl MsgpackValue {
         return MsgpackValue::wrap(self.store, c);
     }
 
-    /// Nth map key. Out of range returns `self`.
+    /// The key of entry `n` (0-based) of a map, as a value (keys need not be
+    /// strings).
+    ///
+    /// When `n` is out of range, or this is not a map, this returns the value
+    /// itself.
     pub fn key_at(int n) -> MsgpackValue {
         if self.tag != TAG_MAP {
             return self;
@@ -406,11 +563,27 @@ impl MsgpackValue {
         return MsgpackValue::wrap(self.store, c);
     }
 
+    /// Returns `true` when this map has an entry whose key is the string `key`.
     pub fn has(string key) -> bool {
         return self.find_key(key) >= 0;
     }
 
-    /// First string-key match. Missing returns `self`.
+    /// The value of the first entry of this map whose key is the string `key`.
+    ///
+    /// When there is none, or this is not a map, this returns the value
+    /// itself, so check `has` first when the key may be missing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use msgpack::{MsgpackValue};
+    /// # use tests::assert;
+    /// let m = MsgpackValue::empty_map();
+    /// let _ = m.put(MsgpackValue::from_string("a"), MsgpackValue::from_int(1));
+    /// let _ = m.put(MsgpackValue::from_string("a"), MsgpackValue::from_int(2));
+    /// assert!(m.map_len() == 2 && m.get("a").i == 1);
+    /// assert!(!m.has("b") && m.get("b").is_map());
+    /// ```
     pub fn get(string key) -> MsgpackValue {
         let c = self.find_key(key);
         if c < 0 {
@@ -439,7 +612,20 @@ impl MsgpackValue {
         return -1;
     }
 
-    /// Copy `child` onto the end of this array.
+    /// Copies `child` onto the end of this array.
+    ///
+    /// Returns `MsgpackError::Invalid` when this is not an array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use msgpack::{MsgpackValue, MsgpackError};
+    /// # use tests::assert;
+    /// let arr = MsgpackValue::empty_array();
+    /// assert!(arr.append(MsgpackValue::from_int(1)).is_ok());
+    /// assert!(arr.array_len() == 1 && arr.child(0).i == 1);
+    /// assert!(MsgpackValue::nil().append(arr).is_err());
+    /// ```
     pub fn append(MsgpackValue child) -> Result<(), MsgpackError> {
         if self.tag != TAG_ARR {
             raise MsgpackError::Invalid { offset: 0 };
@@ -450,7 +636,10 @@ impl MsgpackValue {
         return;
     }
 
-    /// Copy `key` and `val` onto the end of this map. Duplicate keys are kept.
+    /// Copies `key` and `val` onto the end of this map as a new entry.
+    /// An existing entry with the same key is kept, not replaced.
+    ///
+    /// Returns `MsgpackError::Invalid` when this is not a map.
     pub fn put(MsgpackValue key, MsgpackValue val) -> Result<(), MsgpackError> {
         if self.tag != TAG_MAP {
             raise MsgpackError::Invalid { offset: 0 };
@@ -490,7 +679,7 @@ impl MsgpackValue {
         self.push_u32(out, lo);
     }
 
-    /// Two's-complement int64. `n` is negative and not i32.
+    // Two's-complement int64. `n` is negative and not i32.
     fn push_i64(Vec<byte> out, int n) {
         if n == I64_MIN {
             self.push_u32(out, TWO_31);
@@ -858,6 +1047,7 @@ impl MsgpackValue {
         raise MsgpackError::Invalid { offset: 0 };
     }
 
+    /// The encoding of this value, as `Msgpack::encode` returns it.
     pub fn encode_buf() -> Result<Vec<byte>, MsgpackError> {
         let n = self.store.tags.len() * 8;
         if n < 16 {
@@ -947,7 +1137,7 @@ impl Parser {
         return Result::Err(err);
     }
 
-    /// `let root = parse_value()?` inside `Result<MsgpackValue, _>` dropped the error.
+    // `let root = parse_value()?` inside `Result<MsgpackValue, _>` dropped the error.
     pub fn finish() -> Result<MsgpackValue, MsgpackError> {
         match self.parse_value() {
             Result::Ok(root) => {
@@ -1340,15 +1530,40 @@ impl Parser {
 }
 
 impl Msgpack {
-    /// The MessagePack format: one-shot encode and decode.
+    /// The MessagePack codec.
     pub static fn standard() -> Msgpack {
         return new Msgpack();
     }
 
+    /// Encodes `value` as MessagePack bytes.
+    ///
+    /// Fails with `MsgpackError::Number` when an extension type code is
+    /// outside -128..=127.
     pub fn encode(MsgpackValue value) -> Result<Vec<byte>, MsgpackError> {
         return value.encode_buf()?;
     }
 
+    /// Decodes exactly one MessagePack value from `bytes`.
+    ///
+    /// Trailing bytes and truncated or reserved values (`0xc1`) are
+    /// `MsgpackError::Invalid`; a string that is not
+    /// UTF-8 is `MsgpackError::Utf8`; a uint64 above the largest `int` is
+    /// `MsgpackError::Number`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use msgpack::{Msgpack, MsgpackValue};
+    /// # use tests::assert;
+    /// // fixmap of 1: "a" => true
+    /// let bytes: Vec<byte> = Vec::new();
+    /// bytes.push(129 as byte);
+    /// bytes.push(161 as byte);
+    /// bytes.push("a");
+    /// bytes.push(195 as byte);
+    /// let v = Msgpack::standard().decode(bytes).unwrap_or(MsgpackValue::nil());
+    /// assert!(v.has("a") && v.get("a").flag);
+    /// ```
     pub fn decode(Vec<byte> bytes) -> Result<MsgpackValue, MsgpackError> {
         let guess = bytes.len() / 2;
         if guess < 4 {
@@ -1358,6 +1573,10 @@ impl Msgpack {
         return p.finish()?;
     }
 
+    /// `encode`, then the bytes read as a `string`.
+    ///
+    /// MessagePack is binary and most encodings are not valid UTF-8, which
+    /// fails with `MsgpackError::Utf8`; prefer `encode`.
     pub fn encode_str(MsgpackValue value) -> Result<string, MsgpackError> {
         let bytes = self.encode(value)?;
         return match from_bytes(bytes) {
@@ -1366,6 +1585,7 @@ impl Msgpack {
         };
     }
 
+    /// `decode` on the bytes of `s`. Prefer `decode`: MessagePack is binary.
     pub fn decode_str(string s) -> Result<MsgpackValue, MsgpackError> {
         return self.decode(to_bytes(s))?;
     }
