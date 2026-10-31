@@ -275,7 +275,7 @@ class MsgpackValue {
     pub s: string,
 }
 
-/// Internal parser state used by `Msgpack::decode`; not meant to be used directly.
+// Internal parser state used by `Msgpack::decode`; not meant to be used directly.
 class Parser {
     bytes: Vec<byte>,
     i: int,
