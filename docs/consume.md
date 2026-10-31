@@ -34,8 +34,6 @@ let out = m.encode(v)?;
 
 `decode_str` is `to_bytes` then `decode`. `encode_str` is `encode` then `from_bytes`. A `from_bytes` failure on encode is `MsgpackError::Utf8`. MessagePack frames are binary, so prefer `decode` / `encode`.
 
-Prefer matching directly on `decode` results. Storing `Result<MsgpackValue, MsgpackError>` in a `let` before matching can mis-handle the payload until a compiler fix lands.
-
 ### MsgpackValue
 
 `MsgpackValue` is a class plus arena handle, not an enum. Nested arrays and maps come from decode, or from `append` / `put`, which copy into the parent store.
