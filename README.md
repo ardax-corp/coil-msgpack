@@ -4,7 +4,7 @@ Userland MessagePack for [coil](https://github.com/ardax-corp/coil-lang). Packag
 
 Pure Coil encode/decode. No native library. The tree is an arena of primitive vecs; a `MsgpackValue` is a `(store, idx)` handle — named-module recursive `Vec<MsgpackValue>` does not unify (`MsgpackValue` vs `msgpack::MsgpackValue`).
 
-One module, `msgpack` (`src/msgpack.hy`): the `Msgpack` codec, the `MsgpackValue` handle it decodes to and builds with, and the `MsgpackError` it reports.
+One module, `msgpack` (`src/msgpack.coil`): the `Msgpack` codec, the `MsgpackValue` handle it decodes to and builds with, and the `MsgpackError` it reports.
 
 ## Example
 
@@ -40,7 +40,7 @@ fn main() {
 }
 ```
 
-Run it with `coil --root ../coil-stdlib/src --root ../coil-msgpack/src main.hy` (prints `18 bytes`, then `coil`).
+Run it with `coil --root ../coil-stdlib/src --root ../coil-msgpack/src main.coil` (prints `18 bytes`, then `coil`).
 
 ## API
 
@@ -74,7 +74,7 @@ Extension data is raw `(type, bytes)`, including timestamp type `-1`. An extensi
 
 | Path | Role |
 |------|------|
-| `src/msgpack.hy` | `Msgpack`, `MsgpackValue`, `MsgpackError`, parser/encoder |
+| `src/msgpack.coil` | `Msgpack`, `MsgpackValue`, `MsgpackError`, parser/encoder |
 | `coil.toml` | spool manifest (`[package] name = "msgpack"`); coil does not read it |
 
 ## Consume
@@ -92,7 +92,7 @@ No tags yet, so pin a commit. Without spool, pass `--root ../coil-msgpack/src` t
 coil test --root ../coil-stdlib/src
 ```
 
-This runs `tests/` and the examples in the `///` docs of `src/msgpack.hy`.
+This runs `tests/` and the examples in the `///` docs of `src/msgpack.coil`.
 
 ## License
 

@@ -1,6 +1,6 @@
 # Consuming coil-msgpack
 
-This package is `msgpack`. `use msgpack::{Msgpack, MsgpackValue, MsgpackError}` resolves from `src/msgpack.hy`. One-shot encode/decode ships here. Do not add a native/FFI dep.
+This package is `msgpack`. `use msgpack::{Msgpack, MsgpackValue, MsgpackError}` resolves from `src/msgpack.coil`. One-shot encode/decode ships here. Do not add a native/FFI dep.
 
 ## Depend on it
 
@@ -15,12 +15,12 @@ This repo has no tags, so pin a commit with `--rev`. spool records the dep in `c
 Without spool, clone this repo next to your project and pass the roots yourself. coil reads no `coil.toml` and no `coil.lock`.
 
 ```bash
-coil --root ../coil-msgpack/src main.hy
+coil --root ../coil-msgpack/src main.coil
 ```
 
 ## Call Msgpack::standard()
 
-Signatures are in [`src/msgpack.hy`](../src/msgpack.hy). Call patterns are in [`tests/format.hy`](../tests/format.hy).
+Signatures are in [`src/msgpack.coil`](../src/msgpack.coil). Call patterns are in [`tests/format.coil`](../tests/format.coil).
 
 ```coil
 use msgpack::{Msgpack, MsgpackValue, MsgpackError};
