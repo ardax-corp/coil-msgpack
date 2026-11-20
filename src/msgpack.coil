@@ -163,7 +163,6 @@ class Copier {
 }
 
 impl Copier {
-    #[max_depth(256)]
     pub fn copy(int src_idx) -> int {
         let tag = self.src.tags[src_idx];
         let flag = self.src.flags[src_idx];
@@ -931,7 +930,6 @@ impl MsgpackValue {
         return;
     }
 
-    #[max_depth(256)]
     fn emit_idx(Vec<byte> out, int idx) -> Result<(), MsgpackError> {
         let tag = self.store.tags[idx];
         if tag == TAG_NIL {
@@ -1278,7 +1276,6 @@ impl Parser {
         return self.store.add(TAG_EXT, false, ty, 0.0, "", "", data);
     }
 
-    #[max_depth(256)]
     fn parse_array(int count) -> Result<int, MsgpackError> {
         let bin: Vec<byte> = Vec::new();
         let arr = self.store.add(TAG_ARR, false, 0, 0.0, "", "", bin);
@@ -1292,7 +1289,6 @@ impl Parser {
         return arr;
     }
 
-    #[max_depth(256)]
     fn parse_map(int count) -> Result<int, MsgpackError> {
         let bin: Vec<byte> = Vec::new();
         let obj = self.store.add(TAG_MAP, false, 0, 0.0, "", "", bin);
